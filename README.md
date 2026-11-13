@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# Assignments for Data management engineering cours
-=======
 # Домашние задания 5 и 6 — Исследовательский анализ данных
 
 ## Обзор
@@ -36,4 +33,3 @@ pip install -r requirements.txt
 ## Визуализации
 
 Домашнее задание 6 включает интерактивные визуализации Plotly Express, настроенные для статического отображения в формате PNG, что обеспечивает их корректное отображение на GitHub.
->>>>>>> 65b7756 (Homework 6: Add advanced Plotly visualizations to EDA)
