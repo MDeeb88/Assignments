@@ -1,7 +1,11 @@
 """Command-line entry point for the Steam Games ETL pipeline."""
 
 import argparse
+import sqlite3
+import sys
 from pathlib import Path
+
+import psycopg2
 
 from .extract import extract_data
 from .load import load_data
@@ -40,15 +44,28 @@ def main() -> None:
 
     print("Starting Steam Games ETL pipeline...\n")
 
-    raw = extract_data(args.dataset)
-    transformed = transform_data(raw)
-    validated = validate_data(transformed)
+    try:
+        raw = extract_data(args.dataset)
+        transformed = transform_data(raw)
+        validated = validate_data(transformed)
 
-    count = load_data(
-        validated,
-        creds_path=args.creds,
-        table_name=args.table,
-    )
+        count = load_data(
+            validated,
+            creds_path=args.creds,
+            table_name=args.table,
+        )
+
+    except (
+        FileNotFoundError,
+        ValueError,
+        TypeError,
+        RuntimeError,
+        OSError,
+        sqlite3.Error,
+        psycopg2.Error,
+    ) as exc:
+        print(f"\nETL failed: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
 
     print("\nETL completed successfully.")
     print(f"Destination: homeworks.{args.table}")

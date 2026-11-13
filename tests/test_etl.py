@@ -3,6 +3,9 @@
 import pandas as pd
 import pytest
 
+from etl import load as etl_load
+from etl.extract import extract_data
+from etl.load import load_data
 from etl.transform import transform_data
 from etl.validate import validate_data
 
@@ -87,3 +90,158 @@ def test_validate_rejects_negative_prices():
 
     with pytest.raises(ValueError, match="negative Price"):
         validate_data(df)
+
+
+def test_extract_reads_valid_parquet(tmp_path):
+    """Test extraction of a valid Parquet dataset."""
+
+    data = pd.DataFrame(
+        {
+            "AppID": [10, 20],
+            "Name": ["Game A", "Game B"],
+            "Price": [1.99, 2.99],
+            "Positive": [100, 200],
+            "Negative": [10, 20],
+        }
+    )
+
+    dataset = tmp_path / "games.parquet"
+    data.to_parquet(dataset, index=False)
+
+    result = extract_data(dataset)
+
+    assert len(result) == 2
+    assert list(result.columns) == ["AppID", "Name", "Price", "Positive", "Negative"]
+
+
+def test_extract_rejects_missing_dataset(tmp_path):
+    """Test extraction when the dataset does not exist."""
+
+    dataset = tmp_path / "missing.parquet"
+
+    with pytest.raises(FileNotFoundError, match="Dataset not found"):
+        extract_data(dataset)
+
+
+def test_extract_rejects_missing_columns(tmp_path):
+    """Test extraction when required columns are missing."""
+
+    data = pd.DataFrame(
+        {
+            "AppID": [10],
+            "Name": ["Game A"],
+        }
+    )
+
+    dataset = tmp_path / "incomplete.parquet"
+    data.to_parquet(dataset, index=False)
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        extract_data(dataset)
+
+
+def test_load_data_uploads_and_verifies_records(monkeypatch):
+    """Test database loading using a mocked PostgreSQL connection."""
+
+    class FakeComposable:
+        def __init__(self, value):
+            self.value = value
+
+        def format(self, *args):
+            return self
+
+        def as_string(self, conn):
+            return self.value
+
+    class FakeCursor:
+        def __init__(self):
+            self.executed = []
+
+        def execute(self, query):
+            self.executed.append(query)
+
+        def fetchone(self):
+            return (1,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeConnection:
+        def __init__(self):
+            self.fake_cursor = FakeCursor()
+            self.closed = False
+
+        def cursor(self):
+            return self.fake_cursor
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def close(self):
+            self.closed = True
+
+    connection = FakeConnection()
+    uploaded_records = []
+
+    monkeypatch.setattr(
+        etl_load,
+        "get_credentials",
+        lambda path: {
+            "url": "localhost",
+            "port": 5432,
+            "user": "test",
+            "pass": "test",
+            "db_name": "homeworks",
+        },
+    )
+
+    monkeypatch.setattr(
+        etl_load.psycopg2,
+        "connect",
+        lambda **kwargs: connection,
+    )
+
+    monkeypatch.setattr(
+        etl_load.sql,
+        "SQL",
+        FakeComposable,
+    )
+
+    monkeypatch.setattr(
+        etl_load.sql,
+        "Identifier",
+        FakeComposable,
+    )
+
+    monkeypatch.setattr(
+        etl_load,
+        "execute_values",
+        lambda cursor, query, records: uploaded_records.extend(records),
+    )
+
+    data = pd.DataFrame(
+        {
+            "AppID": [10],
+            "Name": ["Game A"],
+            "Price": [1.99],
+            "Positive": [100],
+            "Negative": [10],
+        }
+    )
+
+    result = load_data(
+        data,
+        creds_path="creds.db",
+        table_name="deebm",
+    )
+
+    assert result == 1
+    assert len(uploaded_records) == 1
+    assert uploaded_records[0][0] == 10
+    assert connection.closed is True
