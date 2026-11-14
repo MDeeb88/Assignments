@@ -1,0 +1,7 @@
+Homework 7 — PostgreSQL Upload Results
+Database: homeworks
+Schema: public
+Table: deebm
+Records uploaded: 100
+Records verified: 100
+Status: SUCCESS

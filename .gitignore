@@ -1,0 +1,18 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+creds.db
+*.sqlite
+*.sqlite3
+
+# Local datasets
+datasets/
+
+# Jupyter
+.ipynb_checkpoints/
